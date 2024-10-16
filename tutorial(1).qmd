@@ -1,0 +1,221 @@
+---
+title: "Expressçao Diferencial"
+author: "Jean Resende"
+format: pdf
+editor: visual
+---
+
+![](images/390px-Journal.pcbi.1004393.g002.png)
+
+```{r}
+library(DESeq2)
+```
+
+```{r}
+load("data_mat_gse_lainfs.RData")
+coldata <- read.csv("coldata.csv")
+```
+
+## Estroma
+
+### Preparando objetos
+
+```{r}
+coldataSamples <- coldata[coldata$cohort=="estroma", c("samples","condition")]
+
+dataSamples <- data_mat_gse
+dataSamples$abundance <- dataSamples$abundance[,coldataSamples$samples]
+dataSamples$counts <- dataSamples$counts[,coldataSamples$samples]
+dataSamples$length <- dataSamples$length[,coldataSamples$samples]
+
+coldataSamples$condition <- as.factor(coldataSamples$condition)
+```
+
+### Tranformando objeto para DESeqDataSet
+
+```{r}
+ddsTxi <- DESeqDataSetFromTximport(txi = dataSamples,
+                                   colData = coldataSamples,
+                                   design = ~ condition)
+```
+
+### Pré-filtragem
+
+```{r}
+keep <- rowSums(counts(ddsTxi)) >= 10
+dds <- ddsTxi[keep,]
+```
+
+### Referência
+
+```{r}
+dds$condition <- relevel(dds$condition, ref = "saudavel")
+```
+
+### Expressão diferencial
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+res_padj05_lfc0 <- results(dds, 
+                           contrast = c("condition","suscetivel","saudavel"),
+                           alpha = 0.05)
+```
+
+```{r}
+head(res_padj05_lfc0)
+```
+
+```{r}
+write.csv(res_padj05_lfc0, file = "estroma.csv")
+```
+
+```{r}
+log2Fold_1 <- res_padj05_lfc0[res_padj05_lfc0$log2FoldChange < (-1) | 
+                                res_padj05_lfc0$log2FoldChange > 1,]
+
+log2Fold_1 <- na.omit(log2Fold_1)
+log2Fold_1 <- log2Fold_1[log2Fold_1$padj < 0.05,]
+
+head(log2Fold_1)
+```
+
+### Visualização
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+library(magrittr)
+```
+
+```{r}
+rm(list = ls())
+```
+
+```{r}
+data_vucPlot <- as.data.frame(read.csv("estroma.csv"))
+
+data_vucPlot <- data_vucPlot[data_vucPlot$padj < 0.05,] %>% na.omit()
+
+data_vucPlot$diffexpressed <- "NO"
+data_vucPlot$diffexpressed[data_vucPlot$log2FoldChange < (-2)] <- "DOWN"
+data_vucPlot$diffexpressed[data_vucPlot$log2FoldChange > (2)] <- "UP"
+
+mycolors <- c("#00AFBB","#bb0c00","grey")
+names(mycolors) <- c("DOWN","UP","NO")
+```
+
+```{r}
+graph <- ggplot(data_vucPlot, aes(x=log2FoldChange, y= -log10(padj),
+                          col=diffexpressed))+
+  geom_point(size=0.5)+
+  labs(color = 'DEGs', x=expression("log"[2]*"FC"), y=expression("-log"[10]*"padj"))+
+  coord_cartesian(ylim = c(1,10), xlim = c(-5, 5)) +
+  scale_color_manual(values = mycolors,
+                     labels=c(paste("DOWN\n (",
+                                    length(data_vucPlot$diffexpressed[data_vucPlot$diffexpressed=="DOWN"]),
+                                    ")", sep = ""),
+                              paste("NO\n (", length(data_vucPlot$diffexpressed[data_vucPlot$diffexpressed=="NO"]),
+                                    ")", sep = ""),
+                              paste("UP\n (",
+                                    length(data_vucPlot$diffexpressed[data_vucPlot$diffexpressed=="UP"]),
+                                    ")", sep = "")))+
+  ggtitle("Expression ... ")+
+  guides(color = guide_legend(label.position = "bottom",
+                              title.position="top",
+                              title.hjust=0.5,
+                              override.aes=list(size=3,
+                                                shape=21,
+                                                fill=c("#00AFBB","grey","#bb0c00"))))+
+  theme(
+    plot.title=element_text(hjust=0.5),
+    legend.position="bottom",
+    legend.margin = margin(-5, -5, 5, -5),
+    legend.spacing.y = unit(0, 'cm'), 
+    title = element_text(size=10), 
+    axis.title.y = element_text(size=10), 
+    axis.title.x = element_text(size=10), 
+    axis.text.y=element_text(size=8), 
+    axis.text.x=element_text(size=8),
+    axis.ticks = element_line(linetype=1, color="grey"),
+    legend.text=element_text(size=10),
+    legend.title=element_text(size=10 ),
+    legend.key.size = unit(0,"mm"),
+    legend.background = element_rect(fill=NULL, color=NULL),
+    axis.line = element_blank(),
+    panel.grid.major.x = element_line(linetype=111, color="grey80", size = 0.4),
+    panel.grid.major = element_line(linetype=3, color="grey", size = 0.2),
+    panel.background = element_rect(fill = "grey98", colour = "grey50"),
+    panel.border = element_rect(colour = "grey", fill=NA, size=1))
+```
+
+```{r}
+graph
+```
+
+```{r}
+ggsave("UpDown_estroma.pdf",graph, width = 7, height = 5)
+```
+
+# Atividade
+
+Fazer a expressão diferencial para o tecido adiposo
+
+# Expressão gênica
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+```
+
+```{r}
+rm(list = ls())
+```
+
+```{r}
+load("data_mat_gse_lainfs.RData")
+coldata <- read.csv("coldata.csv")
+```
+
+```{r}
+coldataSamples <- coldata[coldata$cohort=="estroma", c("samples","condition")]
+
+dataSamples <- data_mat_gse
+dataSamples$abundance <- dataSamples$abundance[,coldataSamples$samples]
+dataSamples$counts <- dataSamples$counts[,coldataSamples$samples]
+dataSamples$length <- dataSamples$length[,coldataSamples$samples]
+
+coldataSamples$condition <- as.factor(coldataSamples$condition)
+```
+
+```{r}
+colnames(dataSamples$abundance) == coldataSamples$samples
+
+data <- data.frame(
+  BRACA2 = dataSamples$abundance["ENSG00000139618",],
+  condition = coldataSamples$condition
+)
+```
+
+```{r}
+ggplot(data, aes(x=condition, y=log2(BRACA2 + 1), fill=condition))+
+  geom_boxplot()+
+  scale_fill_manual(values = c("#313695","#a50026"))+
+  #facet_wrap(~BMI_classification)+
+  geom_rug(data = data[data$condition=="saudavel",], 
+           aes(x=NULL), 
+           sides=  "l",
+           colour= "#313695")+
+  geom_rug(data = data[data$condition=="suscetivel",], 
+           aes(x=NULL), 
+           sides=  "r",
+           colour="#a50026" )+
+  stat_compare_means(method="wilcox.test", 
+                     label.x = c(1.3), 
+                     #label.y = 9.5,
+                     label="p.format",
+                     size=3)+
+  theme(legend.position = "none")
+```
